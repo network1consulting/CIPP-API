@@ -4,7 +4,7 @@ using namespace System.Net
 
 Param ($Request, $TriggerMetadata)
 
-Write-Verbose "Request received: $($Request | ConvertTo-Json -Compress)"
+Write-Information "Request received: $($Request | ConvertTo-Json -Compress)"
 
 $ProgressPreference = 'SilentlyContinue'
 
@@ -16,8 +16,8 @@ $roleGroupMappings = @{
 }
 
 # Define the function to check if a user is in a group
-function Test-GroupMembership {
-    Param ($GroupId, $AccessToken)
+function Get-GroupMembership {
+    Param ($AccessToken)
 
     $url = "https://graph.microsoft.com/v1.0/me/memberOf"
     $headers = @{
@@ -27,14 +27,13 @@ function Test-GroupMembership {
     try {
         $groupsResponse = Invoke-WebRequest -Uri $url -Headers $headers -Method Get -UseBasicParsing
         if ($groupsResponse.StatusCode -ne 200) { return $false }
+        $matchingGroups = $groupsResponse.Content | ConvertFrom-Json -ErrorAction Stop
     } catch {
         Write-Warning $_.Exception.Message
         return $false
     }
 
-    $matchingGroups = $groupsResponse.Content | ConvertFrom-Json | Where-Object { $_.id -eq $GroupId }
-    Write-Information "Found $($matchingGroups.Count) matching groups"
-    return ($matchingGroups.Count -gt 0)
+    return $matchingGroups.value
 }
 
 # Define the main function
@@ -42,14 +41,11 @@ function Get-CustomAppRole {
     Param ($User)
 
     $roles = @()
+    $memberOfGroups = Get-GroupMembership -AccessToken $User.accessToken
     foreach ($entry in $roleGroupMappings.GetEnumerator()) {
         $roleName = $entry.Key
         $groupId = $entry.Value
-
-        $isUserInGroup = Test-GroupMembership -GroupId $groupId -AccessToken $User.accessToken
-        if ($isUserInGroup) {
-            $roles += $roleName
-        }
+        if ($groupId -in $memberOfGroups.id) { $roles += $roleName }
     }
 
     Write-Information "User $($User.userPrincipalName) has roles: $($roles -join ', ')"
@@ -57,7 +53,7 @@ function Get-CustomAppRole {
 }
 
 # Call the main function
-$rolesJson = Get-CustomAppRole -User $Request.Body | ConvertTo-Json -Compress
+$rolesJson = Get-CustomAppRole -User $Request.Body.value | ConvertTo-Json -Compress
 
 Push-OutputBinding -Name 'Response' -Value ([HttpResponseContext] @{
     StatusCode = [HttpStatusCode]::OK
