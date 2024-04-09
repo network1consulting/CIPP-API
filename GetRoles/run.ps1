@@ -4,7 +4,7 @@ using namespace System.Net
 
 Param ($Request, $TriggerMetadata)
 
-Write-Information "Request received: $($Request | ConvertTo-Json -Compress)"
+Write-Verbose "Request received: $($Request | ConvertTo-Json -Compress)"
 
 $ProgressPreference = 'SilentlyContinue'
 
