@@ -15,20 +15,20 @@ $roleGroupMappings = @{
 function Test-GroupMembership {
     Param ($GroupId, $AccessToken)
 
-    $url = "https://graph.microsoft.com/v1.0/me/memberOf?`$filter=id eq '$GroupId'"
+    $url = "https://graph.microsoft.com/v1.0/me/memberOf"
     $headers = @{
         'Authorization' = "Bearer $AccessToken"
     }
 
     try {
-        $graphResponse = Invoke-WebRequest -Uri $url -Headers $headers -Method Get -UseBasicParsing
-        if ($graphResponse.StatusCode -ne 200) { return $false }
+        $memberOfGroups = Invoke-WebRequest -Uri $url -Headers $headers -Method Get -UseBasicParsing
+        if ($memberOfGroups.StatusCode -ne 200) { return $false }
     } catch {
         Write-Error $_.Exception.Message
         return $false
     }
 
-    $matchingGroups = $graphResponse.value | Where-Object { $_.id -eq $GroupId }
+    $matchingGroups = $memberOfGroups.value | Where-Object { $_.id -eq $GroupId }
     return ($matchingGroups.Count -gt 0)
 }
 
