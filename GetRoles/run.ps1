@@ -48,12 +48,12 @@ function Get-CustomAppRole {
         if ($groupId -in $memberOfGroups.id) { $roles += $roleName }
     }
 
-    Write-Information "User $($User.userPrincipalName) has roles: $($roles -join ', ')"
+    Write-Information "User $($User.userDetails) has roles: $($roles -join ', ')"
     return @{ 'roles' = $roles }
 }
 
 # Call the main function
-$rolesJson = Get-CustomAppRole -User $Request.Body.value | ConvertTo-Json -Compress
+$rolesJson = Get-CustomAppRole -User $Request.Body | ConvertTo-Json -Compress
 
 Push-OutputBinding -Name 'Response' -Value ([HttpResponseContext] @{
     StatusCode = [HttpStatusCode]::OK
