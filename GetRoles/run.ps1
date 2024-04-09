@@ -4,6 +4,10 @@ using namespace System.Net
 
 Param ($Request, $TriggerMetadata)
 
+Write-Verbose "Request received: $($Request | ConvertTo-Json -Compress)"
+
+$ProgressPreference = 'SilentlyContinue'
+
 # Define the role-group mappings
 $roleGroupMappings = @{
     'admin' = '88563abb-31cd-4510-ba80-94323563c374' # CIPP Administrators
@@ -21,14 +25,15 @@ function Test-GroupMembership {
     }
 
     try {
-        $memberOfGroups = Invoke-WebRequest -Uri $url -Headers $headers -Method Get -UseBasicParsing
-        if ($memberOfGroups.StatusCode -ne 200) { return $false }
+        $groupsResponse = Invoke-WebRequest -Uri $url -Headers $headers -Method Get -UseBasicParsing
+        if ($groupsResponse.StatusCode -ne 200) { return $false }
     } catch {
-        Write-Error $_.Exception.Message
+        Write-Warning $_.Exception.Message
         return $false
     }
 
-    $matchingGroups = $memberOfGroups.value | Where-Object { $_.id -eq $GroupId }
+    $matchingGroups = $groupsResponse.Content | ConvertFrom-Json | Where-Object { $_.id -eq $GroupId }
+    Write-Information "Found $($matchingGroups.Count) matching groups"
     return ($matchingGroups.Count -gt 0)
 }
 
@@ -38,25 +43,24 @@ function Get-CustomAppRole {
 
     $roles = @()
     foreach ($entry in $roleGroupMappings.GetEnumerator()) {
-        $role = $entry.Key
+        $roleName = $entry.Key
         $groupId = $entry.Value
 
         $isUserInGroup = Test-GroupMembership -GroupId $groupId -AccessToken $User.accessToken
         if ($isUserInGroup) {
-            $roles += $role
+            $roles += $roleName
         }
     }
 
+    Write-Information "User $($User.userPrincipalName) has roles: $($roles -join ', ')"
     return @{ 'roles' = $roles }
 }
 
-# Call the main function with a test user
+# Call the main function
 $rolesJson = Get-CustomAppRole -User $Request.Body | ConvertTo-Json -Compress
 
-$response = ([HttpResponseContext] @{
+Push-OutputBinding -Name 'Response' -Value ([HttpResponseContext] @{
     StatusCode = [HttpStatusCode]::OK
     Body = $rolesJson
     ContentType = 'application/json'
 })
-
-Push-OutputBinding -Name 'Response' -Value $response
