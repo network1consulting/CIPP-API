@@ -1,5 +1,7 @@
 # Custom Azure Function to enable custom Azure Active Directory authentication to bypass the built-in 25 user limit
 
+using namespace System.Net
+
 Param ($Request, $TriggerMetadata)
 
 # Define the role-group mappings
@@ -17,13 +19,16 @@ function Test-GroupMembership {
     $headers = @{
         'Authorization' = "Bearer $AccessToken"
     }
-    $response = Invoke-RestMethod -Uri $url -Headers $headers -Method Get
 
-    if ($response.status -ne 200) {
+    try {
+        $graphResponse = Invoke-WebRequest -Uri $url -Headers $headers -Method Get -UseBasicParsing
+        if ($graphResponse.StatusCode -ne 200) { return $false }
+    } catch {
+        Write-Error $_.Exception.Message
         return $false
     }
 
-    $matchingGroups = $response.value | Where-Object { $_.id -eq $GroupId }
+    $matchingGroups = $graphResponse.value | Where-Object { $_.id -eq $GroupId }
     return ($matchingGroups.Count -gt 0)
 }
 
