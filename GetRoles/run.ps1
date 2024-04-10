@@ -19,7 +19,8 @@ $roleGroupMappings = @{
 function Get-GroupMembership {
     Param ($AccessToken)
 
-    $url = "https://graph.microsoft.com/v1.0/me/memberOf"
+    # Use transitiveMemberOf to account for nested group membership
+    $url = "https://graph.microsoft.com/v1.0/me/transitiveMemberOf"
     $headers = @{
         'Authorization' = "Bearer $AccessToken"
     }
