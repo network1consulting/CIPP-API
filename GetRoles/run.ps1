@@ -4,7 +4,7 @@ using namespace System.Net
 
 Param ($Request, $TriggerMetadata)
 
-Write-Verbose "Request received: $($Request | ConvertTo-Json -Compress)"
+Write-Verbose "Request received: $($Request | ConvertTo-Json -Compress -WarningAction SilentlyContinue)"
 
 $ProgressPreference = 'SilentlyContinue'
 
@@ -54,7 +54,7 @@ function Get-CustomAppRole {
 }
 
 # Call the main function
-$rolesJson = Get-CustomAppRole -User $Request.Body | ConvertTo-Json -Compress
+$rolesJson = Get-CustomAppRole -User $Request.Body | ConvertTo-Json -Compress -Depth 10
 
 Push-OutputBinding -Name 'Response' -Value ([HttpResponseContext] @{
     StatusCode = [HttpStatusCode]::OK
