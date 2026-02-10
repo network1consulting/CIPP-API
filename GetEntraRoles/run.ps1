@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.0.2
+.VERSION 1.0.3
 .GUID 785aef2a-8a16-4183-896b-851d9872bfab
 .AUTHOR Network 1 Consulting
 .COMPANYNAME Network 1 Consulting
@@ -100,29 +100,36 @@ function Test-UserInGroup {
 
 # Role to Group ID mappings (CIPP Role Name --> Entra Group ID)
 $roleGroupMappings = @{
-    # Only allowed to read and list items and send push messages to users
-    readonly = '8c68f6ec-11b2-4964-8789-be746a3f2f2b'  # CIPP Read Only Users
-    # Allowed to perform everything, except change system settings
-    editor = '6da6d947-0053-41e5-ae31-cab7bd33eb59'  # CIPP Editors
-    # Allowed to perform everything
-    admin = '88563abb-31cd-4510-ba80-94323563c374'  # CIPP Administrators
-    # A role that is only allowed to access the settings menu for specific high-privilege settings
+    # CIPP Read Only Users: Only allowed to read and list items and send push messages to users
+    readonly = '8c68f6ec-11b2-4964-8789-be746a3f2f2b'
+    # CIPP Editors: Allowed to perform everything, except change system settings
+    editor = '6da6d947-0053-41e5-ae31-cab7bd33eb59'
+    # CIPP Administrators: Allowed to perform everything
+    admin = '88563abb-31cd-4510-ba80-94323563c374'
+    # No Group: A role that is only allowed to access the settings menu for specific high-privilege settings
     #superadmin = $null
 }
+
+# DEBUG ONLY
+Write-Information "[GetEntraRoles] DEBUG: Request Content:`n$($Request | ConvertTo-Json -Depth 5 -Compress)"
 
 # 1. Parse the user object from the request body
 $user = $Request.Body
 $roles = @()
 
+$hasAccessToken = $false
 if ($user.accessToken) {
-    Write-Host "[GetEntraRoles] Request body contains an access token of length '$($user.accessToken.Length)'"
-} else {
-    Write-Host '[GetEntraRoles] Request body does not contain an access token'
+    if ($user.accessToken -match '\.') {
+        $hasAccessToken = $true
+        Write-Information "[GetEntraRoles] SUCCESS: Valid JWT detected with a length of '$($user.accessToken.Length)'"
+    } else {
+        Write-Warning "[GetEntraRoles] Invalid JWT detected with a length of '$($user.accessToken.Length)'"
+    }
 }
 
 # Extract groups from the claims (since they are already present in your token)
 $userGroups = $user.claims | Where-Object { $_.typ -eq 'groups' } | Select-Object -ExpandProperty val
-Write-Host "[GetEntraRoles] Found $($userGroups.Count) group claims in the request body. Checking membership..."
+Write-Information "[GetEntraRoles] Found $($userGroups.Count) group claims in the request body. Checking membership..."
 
 # 2. Check group membership
 $graphMatchCount = 0
@@ -134,13 +141,13 @@ foreach ($thisRole in $roleGroupMappings.Keys) {
     if ($userGroups -contains $targetGroupId) {
         $roles += $thisRole
         $claimsMatchCount++
-    } elseif ($user.accessToken -and (Test-UserInGroup -GroupId $targetGroupId -BearerToken $user.accessToken)) {
+    } elseif ($hasAccessToken -and (Test-UserInGroup -GroupId $targetGroupId -BearerToken $user.accessToken)) {
         $roles += $thisRole
         $graphMatchCount++
     }
 }
 
-Write-Host @"
+Write-Information @"
 [GetEntraRoles] Matched $($roles.Count) roles from the following sources:
     Graph  : ${graphMatchCount}
     Claims : ${claimsMatchCount}
