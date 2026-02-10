@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.0.4
+.VERSION 1.0.5
 .GUID 785aef2a-8a16-4183-896b-851d9872bfab
 .AUTHOR Network 1 Consulting
 .COMPANYNAME Network 1 Consulting
@@ -96,11 +96,14 @@ function Test-UserInGroup {
         [string] $BearerToken
     )
 
-    # transitiveMemberOf looks through all nested group memberships
-    $url = "https://graph.microsoft.com/v1.0/me/transitiveMemberOf?`$filter=id eq '$GroupId'&`$select=id"
+    # transitiveMemberOf looks through all nested group memberships without returning non-group object types.
+    #   Unless additional permissions are added to our app registration, you will see a Graph API permissions error
+    #   without including "@odata.type eq '#microsoft.graph.group'" in the query filter.
+    $baseUrl = 'https://graph.microsoft.com/v1.0'
+    $url = "$baseUrl/me/transitiveMemberOf/microsoft.graph.group?`$count=true&`$filter=id eq '$GroupId'&`$select=id"
     $headers = @{
         'Authorization' = "Bearer $BearerToken"
-        'ConsistencyLevel' = 'eventual' # Required for certain advanced OData filters in Graph
+        'ConsistencyLevel' = 'eventual' # Required for advanced filters
     }
 
     try {
@@ -110,8 +113,12 @@ function Test-UserInGroup {
         # If any object is returned, the user has membership (direct or transitive)
         return ($response.value.Count -gt 0)
     } catch {
-        # Log error to the Azure Function console for debugging
-        Write-Error "Graph API Error: $_"
+        if ($_.Exception.Message -match 'Request_ResourceNotFound') {
+            Write-Warning "Group '$GroupId' not found: $_"
+        } else {
+            # Log error to the Azure Function console for debugging
+            Write-Error "Graph API call failed: $_"
+        }
         return $false
     }
 }
