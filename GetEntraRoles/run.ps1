@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.0.1
+.VERSION 1.0.2
 .GUID 785aef2a-8a16-4183-896b-851d9872bfab
 .AUTHOR Network 1 Consulting
 .COMPANYNAME Network 1 Consulting
@@ -73,7 +73,7 @@ param($Request, $TriggerMetadata)
 
 function Test-UserInGroup {
     # Helper function for Graph API calls
-    param(
+    param (
         [string] $GroupId,
         [string] $BearerToken
     )
@@ -114,20 +114,37 @@ $roleGroupMappings = @{
 $user = $Request.Body
 $roles = @()
 
+if ($user.accessToken) {
+    Write-Host "[GetEntraRoles] Request body contains an access token of length '$($user.accessToken.Length)'"
+} else {
+    Write-Host '[GetEntraRoles] Request body does not contain an access token'
+}
+
 # Extract groups from the claims (since they are already present in your token)
 $userGroups = $user.claims | Where-Object { $_.typ -eq 'groups' } | Select-Object -ExpandProperty val
+Write-Host "[GetEntraRoles] Found $($userGroups.Count) group claims in the request body. Checking membership..."
 
 # 2. Check group membership
+$graphMatchCount = 0
+$claimsMatchCount = 0
 foreach ($thisRole in $roleGroupMappings.Keys) {
     $targetGroupId = $roleGroupMappings[$thisRole]
 
     # Check if the group is in the claims OR check via Graph for transitive support
     if ($userGroups -contains $targetGroupId) {
         $roles += $thisRole
+        $claimsMatchCount++
     } elseif ($user.accessToken -and (Test-UserInGroup -GroupId $targetGroupId -BearerToken $user.accessToken)) {
         $roles += $thisRole
+        $graphMatchCount++
     }
 }
+
+Write-Host @"
+[GetEntraRoles] Matched $($roles.Count) roles from the following sources:
+    Graph  : ${graphMatchCount}
+    Claims : ${claimsMatchCount}
+"@
 
 # 3. Return the roles in the required JSON format
 Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
