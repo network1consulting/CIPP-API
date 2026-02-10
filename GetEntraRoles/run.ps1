@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.0.0
+.VERSION 1.0.1
 .GUID 785aef2a-8a16-4183-896b-851d9872bfab
 .AUTHOR Network 1 Consulting
 .COMPANYNAME Network 1 Consulting
@@ -87,7 +87,7 @@ function Test-UserInGroup {
 
     try {
         # Using -ErrorAction Stop to ensure catch block triggers on 401/403
-        $response = Invoke-RestMethod -Uri $url -Headers $headers -ErrorAction Stop
+        $response = Invoke-RestMethod -Uri $url -Headers $headers -ContentType 'application/json' -ErrorAction Stop
 
         # If any object is returned, the user has membership (direct or transitive)
         return ($response.value.Count -gt 0)
@@ -112,17 +112,20 @@ $roleGroupMappings = @{
 
 # 1. Parse the user object from the request body
 $user = $Request.Body
-$accessToken = $user.accessToken
 $roles = @()
 
-# 2. Check group membership for each mapped role
-if ($accessToken) {
-    foreach ($thisRole in $roleGroupMappings.Keys) {
-        $groupId = $roleGroupMappings[$thisRole]
+# Extract groups from the claims (since they are already present in your token)
+$userGroups = $user.claims | Where-Object { $_.typ -eq 'groups' } | Select-Object -ExpandProperty val
 
-        if (Test-UserInGroup -GroupId $groupId -BearerToken $accessToken) {
-            $roles += $thisRole
-        }
+# 2. Check group membership
+foreach ($thisRole in $roleGroupMappings.Keys) {
+    $targetGroupId = $roleGroupMappings[$thisRole]
+
+    # Check if the group is in the claims OR check via Graph for transitive support
+    if ($userGroups -contains $targetGroupId) {
+        $roles += $thisRole
+    } elseif ($user.accessToken -and (Test-UserInGroup -GroupId $targetGroupId -BearerToken $user.accessToken)) {
+        $roles += $thisRole
     }
 }
 
