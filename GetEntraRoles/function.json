@@ -5,8 +5,8 @@
       "type": "httpTrigger",
       "direction": "in",
       "name": "Request",
-      "methods": ["get", "post"],
-      "route": "auth/GetEntraRoles"
+      "methods": ["post"],
+      "route": "custom/auth/GetEntraRoles"
     },
     {
       "type": "http",
