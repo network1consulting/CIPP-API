@@ -40,11 +40,11 @@ function Invoke-CIPPStandardSpoofWarn {
         UPDATECOMMENTBLOCK
             Run the Tools\Update-StandardsComments.ps1 script to update this comment block
     .LINK
-        https://docs.cipp.app/user-documentation/tenant/standards/list-standards
+        https://docs.cipp.app/user-documentation/tenant/standards/alignment/templates/available-standards
     #>
 
     param($Tenant, $Settings)
-    $TestResult = Test-CIPPStandardLicense -StandardName 'SpoofWarn' -TenantFilter $Tenant -RequiredCapabilities @('EXCHANGE_S_STANDARD', 'EXCHANGE_S_ENTERPRISE', 'EXCHANGE_S_STANDARD_GOV', 'EXCHANGE_S_ENTERPRISE_GOV', 'EXCHANGE_LITE') #No Foundation because that does not allow powershell access
+    $TestResult = Test-CIPPStandardLicense -StandardName 'SpoofWarn' -TenantFilter $Tenant -Preset Exchange #No Foundation because that does not allow powershell access
 
     if ($TestResult -eq $false) {
         return $true
@@ -58,6 +58,9 @@ function Invoke-CIPPStandardSpoofWarn {
         return
     }
 
+    # Sanitize AllowList — the API may return @('') instead of @() for an empty list
+    $CurrentInfo.AllowList = @($CurrentInfo.AllowList | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+
     # Get state value using null-coalescing operator
     $state = $Settings.state.value ?? $Settings.state
 
@@ -67,7 +70,7 @@ function Invoke-CIPPStandardSpoofWarn {
     # Test if all entries in the AllowListAdd variable are in the AllowList
     $AllowListCorrect = $true
 
-    if ($AllowListAdd -eq $null -or $AllowListAdd.Count -eq 0) {
+    if ($null -eq $AllowListAdd -or $AllowListAdd.Count -eq 0) {
         $AllowListAdd = @{'@odata.type' = '#Exchange.GenericHashTable'; Add = @() }
     } else {
         $AllowListAddEntries = foreach ($entry in $AllowListAdd) {
